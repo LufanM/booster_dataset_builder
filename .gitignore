@@ -1,2 +1,7 @@
 # 忽略 booster_dataset/data 目录下的所有内容
 booster_dataset/data/**
+booster_dataset/rlds_data/**
+*pycache*
+*.pyc
+*.egg-info
+*.vscode*

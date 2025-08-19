@@ -62,7 +62,7 @@ Now we can modify the provided example to convert your own data. Follow the step
 
 4. **Modify Dataset Conversion Code**: Next, modify the function `_generate_examples()`. Here, your own raw data should be 
    loaded, filled into the episode steps and then yielded as a packaged example. Note that the value of the first return argument,
-   `episode_path` in the example, is only used as a sample ID in the dataset and can be set to any value that is connected to the 
+   `episode_path` in the example, **is only used as a sample ID in the dataset and can be set to any value** that is connected to the 
    particular stored episode, or any other random value. Just ensure to avoid using the same ID twice.
 
 5. **Provide Dataset Description**: Next, add a bibtex citation for your dataset in `CITATIONS.bib` and add a short description

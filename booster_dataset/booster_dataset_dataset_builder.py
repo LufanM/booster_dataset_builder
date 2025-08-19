@@ -102,7 +102,7 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='data/train/episode_*.npy'),
+            'train': self._generate_examples(path='data/train/episode_*.npy'), # raw data load path
             'val': self._generate_examples(path='data/val/episode_*.npy'),
         }
 

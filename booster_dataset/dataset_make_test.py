@@ -25,10 +25,6 @@ class ArmKinematicsSolver:
         self.q = pin.neutral(self.model)
         self.left_ee_pose = pin.SE3.Identity()
         self.right_ee_pose = pin.SE3.Identity()
-        
-        # 性能计数器
-        self.computation_time = 0.0
-        self.call_count = 0
     
     def compute_arm_poses(self, joint_positions):
         start_time = time.time()
@@ -49,23 +45,18 @@ class ArmKinematicsSolver:
         
         print(f"left position: {left_pos}, orientation: {left_rot}\n"
               f"right position: {right_pos}, orientation: {right_rot}")
-
-    def print_stats(self):
-        """打印性能统计"""
-        if self.call_count > 0:
-            avg_time = self.computation_time / self.call_count
-            print(f"位姿计算统计: 调用次数={self.call_count}, 平均耗时={avg_time:.3f}ms")
-
+        
 class DualCameraSubscriber(Node):
-    def __init__(self):
+    def __init__(self, cv_show=False):
         super().__init__('synch_camera_subscriber')
         self.get_logger().info("相机同步订阅节点启动...")
         
         # 消息计数器
         self.message_count = 0
         self.start_time = time.time()
-        self.cv_render_flag = False
-        
+        self.cv_render_flag = cv_show
+        self.last_frame_time = time.time()  # 上一帧时间
+
         # 创建相机订阅器
         # self.head_sub = Subscriber(self, Image, '/camera/camera/color/image_raw')
         self.left_sub = Subscriber(self, Image, '/camera_left/color/image_raw')
@@ -123,8 +114,14 @@ class DualCameraSubscriber(Node):
         self.message_count += 1
         current_time = time.time()
 
+        # 计算帧率
+        frame_interval = current_time - self.last_frame_time
+        current_fps = 1.0 / frame_interval if frame_interval > 0 else 0
+        self.last_frame_time = current_time
+            
         # 每30帧打印一次信息
         if self.message_count % 30 == 0:  
+            self.get_logger().info(f"\n=== 帧 #{self.message_count} | 帧率: {current_fps:.2f} Hz ===")
             # self.get_logger().info(f"收到头 图像: 宽度={head_msg.width}, 高度={head_msg.height}, 编码={head_msg.encoding}")
             self.get_logger().info(f"收到左 图像: 宽度={left_msg.width}, 高度={left_msg.height}, 编码={left_msg.encoding}")
             self.get_logger().info(f"收到右 图像: 宽度={right_msg.width}, 高度={right_msg.height}, 编码={right_msg.encoding}")
@@ -148,26 +145,26 @@ class DualCameraSubscriber(Node):
         self.max_diff_history.append(time_diff)
         self.avg_delay_history.append(avg_delay) # 后续没必要可以关闭
         
-        # 每10帧打印一次信息
-        # if self.message_count % 10 == 0:
-        #     avg_diff = sum(self.max_diff_history[-10:]) / 10.0
-        #     avg_delay = sum(self.avg_delay_history[-10:]) / 10.0
+        # 每10帧打印一次信息 关于延迟
+        if self.message_count % 10 == 0:
+            avg_diff = sum(self.max_diff_history[-10:]) / 10.0
+            avg_delay = sum(self.avg_delay_history[-10:]) / 10.0
             
-        #     self.get_logger().info(
-        #         f"同步消息 #{self.message_count}:\n"
-        #         f"  图像当前时间差: {time_diff*1000:.1f}ms\n"
-        #         f"  平均时间差: {avg_diff*1000:.1f}ms\n"
-        #         f"  平均系统延迟: {avg_delay*1000:.1f}ms\n"
-        #         # f"  头部图像当前时间差：{time_diff_head*1000:.1f}ms\n"
-        #         # f"  头部图像系统延迟：{head_delay*1000:.1f}ms"
-        #     )
-        
+            self.get_logger().info(
+                f"同步消息 #{self.message_count}:\n"
+                f"  图像当前时间差: {time_diff*1000:.1f}ms\n"
+                f"  平均时间差: {avg_diff*1000:.1f}ms\n"
+                f"  平均系统延迟: {avg_delay*1000:.1f}ms\n"
+                # f"  头部图像当前时间差：{time_diff_head*1000:.1f}ms\n"
+                # f"  头部图像系统延迟：{head_delay*1000:.1f}ms"
+            )
+
+        # head_img = self.manual_image_conversion(head_msg)
+        left_img = self.manual_image_conversion(left_msg)
+        right_img = self.manual_image_conversion(right_msg)
         # 转换图像为OpenCV格式
         if self.cv_render_flag:
             try:
-                left_img = self.manual_image_conversion(left_msg)
-                right_img = self.manual_image_conversion(right_msg)
-                
                 # 调整图像大小以匹配显示
                 def resize_img(img, max_height=400):
                     h, w = img.shape[:2]
@@ -254,8 +251,7 @@ class B1DataProcessor:
         self.fps = 0.0
 
     def handler(self, low_state_msg):
-        self.kinematics_solver.compute_arm_poses()
-        
+        # self.kinematics_solver.compute_arm_poses()
         """处理接收到的低状态消息并控制打印频率"""
         self.frame_count += 1
 
@@ -293,7 +289,7 @@ class B1DataProcessor:
 # 创建并启动 ROS 节点线程
 def run_ros_node():
     rclpy.init()
-    node = DualCameraSubscriber()
+    node = DualCameraSubscriber(cv_show=False)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -305,20 +301,8 @@ def run_ros_node():
         node.destroy_node()
         rclpy.shutdown()
 
-def run_state_handler():
-    """状态处理线程函数"""
-    processor = B1DataProcessor()
-    channel_subscriber = B1LowStateSubscriber(processor.handler)
-    channel_subscriber.InitChannel()
-    
-    try:
-        time.sleep(0.1)  # 定期检查退出标志
-    finally:
-        channel_subscriber.CloseChannel()
-        print("状态处理线程已关闭")
-
 def main():
-    URDF_PATH = "/path/to/b1_robot.urdf"
+    URDF_PATH = "./T1_7_dof_arm_serial_with_head_arm.urdf"
 
     # 创建并启动所有线程
     threads = []
@@ -329,8 +313,7 @@ def main():
     ros_thread.start()
     threads.append(ros_thread)
 
-
-    # 状态处理主线程
+    # # 状态处理线程
     ChannelFactory.Instance().Init(0)
     processor = B1DataProcessor(URDF_PATH)
     channel_subscriber = B1LowStateSubscriber(processor.handler)
