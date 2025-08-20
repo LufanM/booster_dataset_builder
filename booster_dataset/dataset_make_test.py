@@ -259,7 +259,7 @@ class B1DataProcessor:
         if self.frame_count % 100 == 0:
             current_time = time.time()
             elapsed = current_time - self.start_time
-            self.fps = self.frame_count / elapsed
+            self.fps = self.frame_count / elapsed #TODO 改为相机那边的fps计算方式
             
         # 每10帧打印一次数据
         if self.frame_count % 250 == 0:

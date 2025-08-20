@@ -10,9 +10,9 @@ import tensorflow_hub as hub
 class BoosterDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
-    VERSION = tfds.core.Version('1.0.2')
+    VERSION = tfds.core.Version('1.0.1')
     RELEASE_NOTES = {
-      '1.0.2': 'Initial release.',
+      '1.0.1': 'Initial release.',
     }
 
     def __init__(self, *args, **kwargs):
@@ -140,9 +140,9 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
             # create output data sample
             sample = {
                 'steps': episode,
-                # 'episode_metadata': {
-                #     'file_path': episode_path
-                # }
+                'episode_metadata': {      #必须保留，不然rlds build的时候报错
+                    'file_path': episode_path 
+                }
             }
 
             # if you want to skip an example for whatever reason, simply return None

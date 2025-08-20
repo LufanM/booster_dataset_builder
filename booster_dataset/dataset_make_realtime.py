@@ -44,11 +44,12 @@ class DataCollector:
         self.latest_l_wrist_image = None
         self.latest_r_wrist_image = None
 
-    def update_images(self, left_img, right_img, head_img):
+    # def update_images(self, left_img, right_img, head_img):
+    def update_images(self, left_img, right_img):
         timestamp = time.perf_counter()
         with self.lock:
-            self.image_buffer.append((timestamp, left_img, right_img, head_img))
-            # self.image_buffer.append((timestamp, left_img, right_img, None))
+            # self.image_buffer.append((timestamp, left_img, right_img, head_img))
+            self.image_buffer.append((timestamp, left_img, right_img, None))
 
     def update_joints_state(self, joint_pos):
         timestamp = time.perf_counter()
@@ -146,14 +147,14 @@ class DualCameraSubscriber(Node):
         self.last_frame_time = time.time()  # 上一帧时间
 
         # 创建相机订阅器
-        self.head_sub = Subscriber(self, Image, '/camera/camera/color/image_raw')
+        # self.head_sub = Subscriber(self, Image, '/camera/camera/color/image_raw')
         self.left_sub = Subscriber(self, Image, '/camera_left/color/image_raw')
         self.right_sub = Subscriber(self, Image, '/camera_right/color/image_raw')
         
         # 创建时间同步器
         self.sync = ApproximateTimeSynchronizer(
-            [self.head_sub, self.left_sub, self.right_sub],
-            # [self.left_sub, self.right_sub],
+            # [self.head_sub, self.left_sub, self.right_sub],
+            [self.left_sub, self.right_sub],
             queue_size=20,
             slop=0.1
         )
@@ -183,8 +184,8 @@ class DualCameraSubscriber(Node):
             self.get_logger().error(f"手动图像转换失败: {str(e)}")
             return None
         
-    def sync_callback(self, head_msg, left_msg, right_msg):       
-    # def sync_callback(self, left_msg, right_msg):
+    # def sync_callback(self, head_msg, left_msg, right_msg):       
+    def sync_callback(self, left_msg, right_msg):
         """处理同步后的相机帧"""
         self.message_count += 1
         current_time = time.time()
@@ -197,17 +198,17 @@ class DualCameraSubscriber(Node):
         # 每30帧打印一次信息
         if self.message_count % 30 == 0:  
             self.get_logger().info(f"\n=== 帧 #{self.message_count} | 帧率: {current_fps:.2f} Hz ===")
-            self.get_logger().info(f"收到头 图像: 宽度={head_msg.width}, 高度={head_msg.height}, 编码={head_msg.encoding}")
+            # self.get_logger().info(f"收到头 图像: 宽度={head_msg.width}, 高度={head_msg.height}, 编码={head_msg.encoding}")
             self.get_logger().info(f"收到左 图像: 宽度={left_msg.width}, 高度={left_msg.height}")
             self.get_logger().info(f"收到右 图像: 宽度={right_msg.width}, 高度={right_msg.height}")
 
         left_img = self.manual_image_conversion(left_msg)
         right_img = self.manual_image_conversion(right_msg)
-        head_img = self.manual_image_conversion(head_msg)
+        # head_img = self.manual_image_conversion(head_msg)
         
         # 存储图像数据（状态数据将在状态处理器中添加）
-        self.data_collector.update_images(left_img, right_img, head_img)
-        # self.data_collector.update_images(left_img, right_img)
+        # self.data_collector.update_images(left_img, right_img, head_img)
+        self.data_collector.update_images(left_img, right_img)
 
         if self.cv_render_flag and left_img is not None and right_img is not None:
             try:
