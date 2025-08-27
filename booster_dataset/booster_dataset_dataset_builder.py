@@ -10,14 +10,14 @@ import tensorflow_hub as hub
 class BoosterDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
-    VERSION = tfds.core.Version('1.0.1')
+    VERSION = tfds.core.Version('1.0.3')
     RELEASE_NOTES = {
-      '1.0.1': 'Initial release.',
+      '1.0.3': 'Initial release.',
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-large/5")
+        # self._embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-large/5")
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
@@ -26,22 +26,22 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
                 'steps': tfds.features.Dataset({
                     'observation': tfds.features.FeaturesDict({
                         'image': tfds.features.Image(
-                            shape=(256, 256, 3),
+                            shape=(720, 1280, 3),
                             dtype=np.uint8,
                             encoding_format='png',
                             doc='Main camera RGB observation.',
                         ),
                         'l_wrist_image': tfds.features.Image(
-                            shape=(256, 256, 3),
+                            shape=(240, 424, 3),
                             dtype=np.uint8,
                             encoding_format='png',
-                            doc='Wrist camera RGB observation.',
+                            doc='Left Wrist camera RGB observation. height 240 * weight 424',
                         ),
                         'r_wrist_image': tfds.features.Image(
-                            shape=(256, 256, 3),
+                            shape=(240, 424, 3),
                             dtype=np.uint8,
                             encoding_format='png',
-                            doc='Wrist camera RGB observation.',
+                            doc='Right Wrist camera RGB observation.',
                         ),
                         'joint_pos': tfds.features.Tensor(
                             shape=(14,),
@@ -50,7 +50,7 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
                                 '2x gripper position, 1x door opening angle].',
                         ),
                         'eef_pos': tfds.features.Tensor(
-                            shape=(12,),
+                            shape=(14,),
                             dtype=np.float32,
                             doc='Robot state, consists of [7x robot joint angles, '
                                 '2x gripper position, 1x door opening angle].',
@@ -102,8 +102,8 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='data/train/episode_*.npy'), # raw data load path
-            'val': self._generate_examples(path='data/val/episode_*.npy'),
+            'train': self._generate_examples(path='rlds_data/train/episode_*.npy'), # raw data load path
+            'val': self._generate_examples(path='rlds_data/val/episode_*.npy'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
@@ -117,8 +117,7 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
             episode = []
             for i, step in enumerate(data):
                 # compute Kona language embedding
-                language_embedding = self._embed([step['language_instruction']])[0].numpy()
-
+                # language_embedding = self._embed([step['language_instruction']])[0].numpy()
                 episode.append({
                     'observation': {
                         'image': step['image'],
@@ -140,9 +139,9 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
             # create output data sample
             sample = {
                 'steps': episode,
-                'episode_metadata': {      #必须保留，不然rlds build的时候报错
-                    'file_path': episode_path 
-                }
+                # 'episode_metadata': {     
+                #     'file_path': episode_path 
+                # }
             }
 
             # if you want to skip an example for whatever reason, simply return None
