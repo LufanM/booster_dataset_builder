@@ -1,0 +1,9 @@
+[Unit]
+Description=NTP date service
+ 
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ntpdate  192.168.10.101
+ 
+[Install]
+WantedBy=multi-user.target

@@ -12,11 +12,11 @@ def create_fake_episode(path):
     episode = []
     for step in range(EPISODE_LENGTH):
         episode.append({
-            'image': np.asarray(np.random.rand(256, 256, 3) * 255, dtype=np.uint8),
-            'l_wrist_image': np.asarray(np.random.rand(256, 256, 3) * 255, dtype=np.uint8),
-            'r_wrist_image': np.asarray(np.random.rand(256, 256, 3) * 255, dtype=np.uint8),
+            'image': np.asarray(np.random.rand(720, 1280, 3) * 255, dtype=np.uint8),
+            'l_wrist_image': np.asarray(np.random.rand(424, 240, 3) * 255, dtype=np.uint8),
+            'r_wrist_image': np.asarray(np.random.rand(424, 240, 3) * 255, dtype=np.uint8),
             'joint_pos': np.asarray(np.random.rand(14), dtype=np.float32),
-            'eef_pos': np.asarray(np.random.rand(12), dtype=np.float32),
+            'eef_pos': np.asarray(np.random.rand(14), dtype=np.float32),
             'action': np.asarray(np.random.rand(14), dtype=np.float32),
             'language_instruction': 'dummy instruction',
         })
