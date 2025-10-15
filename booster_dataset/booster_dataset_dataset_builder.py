@@ -10,9 +10,9 @@ import tensorflow_hub as hub
 class BoosterDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
-    VERSION = tfds.core.Version('1.0.3')
+    VERSION = tfds.core.Version('1.0.1')
     RELEASE_NOTES = {
-      '1.0.3': 'Initial release.',
+      '1.0.1': 'Initial release.',
     }
 
     def __init__(self, *args, **kwargs):
@@ -102,8 +102,8 @@ class BoosterDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='rlds_data/train/episode_*.npy'), # raw data load path
-            'val': self._generate_examples(path='rlds_data/val/episode_*.npy'),
+            'train': self._generate_examples(path='data/train/episode_*.npy'), # raw data load path
+            'val': self._generate_examples(path='data/val/episode_*.npy'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:

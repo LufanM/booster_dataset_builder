@@ -20,7 +20,6 @@ output_dir = f'{dataset_name}_videos'
 
 os.makedirs(output_dir, exist_ok=True)
 
-
 instructions_file_path = os.path.join(output_dir, f'{dataset_name}.txt')
 state_file_path = os.path.join(output_dir, f'state.txt')
 # 遍历数据集
