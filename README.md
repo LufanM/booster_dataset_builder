@@ -2,18 +2,51 @@
 
 该仓库的主要用于将**booster T1 7dof**的遥操作数据实时保存下来，并生成RLDS格式的数据集。支持两种方式的生成：
 
-* 直接实时保存数据：一种运行脚本`booster_dataset/create_booster_data_realtime.py`生成`.npy`格式的数据；
+* 直接实时保存数据：一种运行脚本`booster_dataset/create_booster_data_realtime.py`生成`.npy`格式的方式；
 
 * 基于Ros2bag实时保存数据：首先ros2 bag的方式生成一个数据包，然后运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2bag数据包转成`.npy`格式。
 
 
-然后，`.npy`数据格式通过tfds build生成RLDS的数据集，生成方式参考下面**RLDS Dataset Conversion**章节。
+然后，`.npy`数据格式通过tfds build生成RLDS的数据集。
 
 # 1 依赖安装
 
-默认您已经安装了`Booster Teleop`的环境，这样`create_booster_data_realtime.py`的环境就配置好了
+这里默认你已经安装过Booster Teleop的环境，熟悉大部分的安装细节，如有忘记参考Booster Teleop仓库。故这里只给出简略的安装步骤：
+
+> 因为该仓库需要在感知板运行，请务必于感知板进行安装
+
+* [**RLDS Dataset**](https://github.com/kpertsch/rlds_dataset_builder)仓库的基础环境安装
+
+  ```bash
+  cd booster_dataset_builder
+  conda env create -f environment_ubuntu.yml
+  conda activate rlds_env
+  ```
+
+* **booster_robotics_sdk 安装**
+
+  从[T1说明书-V1.1](https://booster.feishu.cn/wiki/UvowwBes1iNvvUkoeeVc3p5wnUg)获取booster_robotics_sdk_release库(指定遥操分支)，然后参考`README.md` 把python binding api 安装到本地
+
+* **[pinocchio](https://github.com/stack-of-tasks/pinocchio)库安装**
+
+  通过**robotpkg**包管理器把pinocchio安装下来（具体参考官网提供的[linux](https://stack-of-tasks.github.io/pinocchio/download.html)安装步骤）
+
+* **其余包安装**
+
+  其余缺失的包，均可通过 `pip install your_missing_package`安装
 
 # 2 数据保存
+
+先启动手腕相机(在运控板)，默认相机启动环境已经安装。相机参数，如分辨率修改请参考[OrbbecSDK_ROS2](https://github.com/orbbec/OrbbecSDK_ROS2)
+
+```bash
+ssh master@192.168.10.101  # 连接网线后的进入方式，否则需要知道运控板ip地址
+cd ~/ros2
+source ./install/setup.bash
+ros2 launch orbbec_camera multi_camera.launch.py
+```
+
+接下来**务必于感知板运行**
 
 ## 2.1 直接实时保存数据
 
@@ -22,28 +55,27 @@
 1. (如果需要手腕相机数据)启动手腕相机，默认相机启动包已经安装于运控板下的`~/ros2_ws/src`
 
    ```bash
-   cd ~/ros2
-   source ./install/setup.bash
-   ros2 launch orbbec_camera multi_camera.launch.py
+   cd booster_dataset_builder/booster_dataset
+   python create_booster_data_realtime.py
    ```
 
-   相机参数，如分辨率修改请参考[OrbbecSDK_ROS2](https://github.com/orbbec/OrbbecSDK_ROS2)
+2. `.npy`数据通过tfds build生成RLDS的数据集，转换如下，详情见**RLDS Dataset Conversion**章节。
 
-2. 运行脚本`booster_dataset/create_booster_data_realtime.py`生成`.npy`格式的数据 。
+   > 当然您也可以将它转换成自己需要的格式，`.npy`数据的格式定义在`create_booster_data_realtime.py`，可根据需要修改，当然需保证与机器人发出的数据保持一一对应，详情请仔细阅读下面**RLDS Dataset Conversion**章节的**3.3**。
 
    ```bash
-   python booster_dataset/create_booster_data_realtime.py
+   conda activate rlds_env
+   cd booster_dataset_builder/booster_dataset
+   rlds build --overwrite 
    ```
-
-3. `.npy`数据通过tfds build生成RLDS的数据集。使用tfds build时，需使用相应的一个环境，参考下面**RLDS Dataset Conversion**章节的**3.1** 和 **3.2**。当然您也可以将它转换成自己需要的格式，`.npy`数据的格式定义在`create_booster_data_realtime.py`，可根据需要修改，当然需保证与机器人发出的数据保持一一对应，详情请仔细阅读下面**RLDS Dataset Conversion**章节的**3.3**。
 
 ## 2.2 基于Ros2bag实时保存数据
 
-**务必于感知板运行**，且默认已启动了手腕相机
-
 * 进入感知板
 
-  
+  ```bash
+  ssh booster@192.168.10.102  # 连接网线后的进入方式，否则需要知道感知板ip地址
+  ```
 
 * 实时保存数据
 
@@ -53,34 +85,36 @@
   ros2 bag record topics /camera_right/color/image_raw     /camera_left/color/image_raw /camera/camera/color/image_raw /low_state
   ```
 
-* 运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2 bag转换成.npy数据，ros2 bag的数据文件需放置于`rosbag_2_npy.py`同级文件夹中。转换后会在统计文件的`./data`生成.npy格式数据，然后拷贝至`booster_dataset/data/`的`train`或者`val`文件夹中，以便进行RLDS格式转换。
+* 运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2 bag转换成.npy数据，ros2 bag的数据文件需放置于`rosbag_2_npy.py`同级文件夹中。转换后会在统计文件的`./data`生成`.npy`格式数据，然后拷贝至booster_dataset/data/的train或者val文件夹中，以便进行RLDS格式转换。
 
   ```bash
   python ros2_data_process/rosbag_2_npy.py --bag_path=./your_rosbag2_file_name --output_dir=./
   ```
 
-* 最后进行RLDS转换，保证`booster_dataset/data/`的`train`合`val`都有episode文件再进行转换，转换参考下面**RLDS Dataset Conversion**章节的**3.1** 和 **3.2**。
+* 最后进行RLDS转换，保证`booster_dataset/data/`的train和val都有episode文件再进行转换，转换如下，详情参考下面**RLDS Dataset Conversion**章节。
 
-
+  ```bash
+  conda activate rlds_env
+  cd booster_dataset_builder/booster_dataset
+  rlds build --overwrite 
+  ```
 
 # 3 RLDS Dataset Conversion
 
 This is based on [**RLDS Dataset**](https://github.com/kpertsch/rlds_dataset_builder) repo,  demonstrates how to convert an existing dataset into RLDS format for X-embodiment experiment integration.
 It provides an example for converting a dummy dataset to RLDS. To convert your own dataset, **fork** this repo and modify the example code for your dataset following the steps below.
 
-> **需要注意的是：**`create_booster_data_realtime.py`里面的step_data数据格式需与`booster_dataset_dataset_builder.py`中的step数据格式一一对应，如标签`image`，如果生成.npy时时height×width=720×1280的格式，那么step里面的shape需为(720, 1280, 3)，如标签`joint_pos`的维度，在.npy生成时的维度与shape里面注明的维度一致，这里7dof双臂的话为14，否则tfds build时会报错。若使用ros2bag也是同样的原理，保证数据格式一一对应。
-
 ## 3.1 Installation
 
 First create a conda environment using the provided environment.yml file (use `environment_ubuntu.yml` or `environment_macos.yml` depending on the operating system you're using):
 
-```
+```bash
 conda env create -f environment_ubuntu.yml
 ```
 
 Then activate the environment using:
 
-```
+```bash
 conda activate rlds_env
 ```
 
@@ -93,7 +127,7 @@ If you want to manually create an environment, the key packages to install are `
 Before modifying the code to convert your own dataset, run the provided example dataset creation script to ensure
 everything is installed correctly. Run the following lines to create some dummy data and convert it to RLDS.
 
-```
+```bash
 cd example_dataset
 python3 create_example_data.py
 tfds build  # tfds build --overwrite ：Convert your dataset according to the rules of *-dataset_builder.py
@@ -102,8 +136,9 @@ tfds build  # tfds build --overwrite ：Convert your dataset according to the ru
 This should create a new dataset in `~/tensorflow_datasets/example_dataset`. Please verify that the example
 conversion worked before moving on.
 
-
 ## 3.3 Converting your Own Dataset to RLDS
+
+>**需要注意的是：**`create_booster_data_realtime.py`里面的step_data数据格式需与`booster_dataset_dataset_builder.py`中的step数据格式一一对应，如标签`image`，如果生成.npy时时height×width=720×1280的格式，那么step里面的shape需为(720, 1280, 3)，如标签`joint_pos`的维度，在.npy生成时的维度与shape里面注明的维度一致，这里7dof双臂的话为14，否则tfds build时会报错。若使用ros2bag也是同样的原理，保证数据格式一一对应。
 
 Now we can modify the provided example to convert your own data. Follow the steps below:
 
@@ -141,7 +176,7 @@ Now we can modify the provided example to convert your own data. Follow the step
 
 That's it! You're all set to run dataset conversion. Inside the dataset directory, run:
 
-```
+```bash
 tfds build --overwrite
 ```
 
@@ -158,7 +193,7 @@ by filling in the name of your dataset into `setup.py` and running `pip install 
 
 Then, make sure that no GPUs are used during data processing (`export CUDA_VISIBLE_DEVICES=`) and run:
 
-```
+```bash
 tfds build --overwrite --beam_pipeline_options="direct_running_mode=multi_processing,direct_num_workers=10"
 ```
 
@@ -168,7 +203,7 @@ You can specify the desired number of workers with the `direct_num_workers` argu
 
 To verify that the data is converted correctly, please run the data visualization script from the base directory:
 
-```
+```bash
 python3 dataset_visualize_mo.py
 ```
 
@@ -199,7 +234,7 @@ line tool. You can follow the installation instructions [here](https://cloud.goo
 
 Next, authenticate your Google account with:
 
-```
+```bash
 gcloud auth login
 ```
 
@@ -212,7 +247,7 @@ to grant permissions to that Google account!
 After logging in with a Google account that has access permissions, you can upload your data with the following 
 command:
 
-```
+```bash
 gsutil -m cp -r ~/tensorflow_datasets/<name_of_your_dataset> gs://xembodiment_data
 ```
 
