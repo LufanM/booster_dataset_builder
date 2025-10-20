@@ -323,7 +323,7 @@ def main():
     # 启动关节状态订阅线程 (500Hz)
     ChannelFactory.Instance().Init(0)
     processor = B1DataProcessor(data_collector)
-    channel_subscriber = B1LowStateSubscriber(processor._state_feedback_handler)
+    channel_subscriber = B1LowStateSubscriber(processor._state_feedback_handler) # TODO:可改成ros2节点订阅
     channel_subscriber.InitChannel()
 
     ctl_T = 1 / 30  # 30Hz的存储数据
