@@ -248,6 +248,90 @@ class BagToNpyConverter:
         
         return True
     
+    def visualize_head_cameras(self, head_img, frame_idx, time_stamp_i, total_frames):
+        """可视化三个相机的同步图像"""
+        if head_img is None:
+            return
+        
+        if frame_idx == 0:
+            # 获取目标高度
+            target_height = 240
+            
+            # 调整所有图像到相同高度，保持宽高比
+            def resize_to_height(img, target_height):
+                h, w = img.shape[:2]
+                ratio = target_height / h
+                new_width = int(w * ratio)
+                return cv2.resize(img, (new_width, target_height))
+            
+            # 调整所有图像尺寸
+            head_img_resized = resize_to_height(head_img, target_height)
+            
+            # 水平拼接三个图像
+            combined_img = np.hstack((head_img_resized))
+            height, width = combined_img.shape[:2]
+            
+            # 创建输出目录（如果不存在）
+            os.makedirs("visualization_videos", exist_ok=True)
+            
+            # 创建视频写入器
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')  # 编码格式
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_path = f"visualization_videos/three_cameras_{timestamp}.avi"
+            self.video_writer = cv2.VideoWriter(output_path, fourcc, self.data_fps, (width, height))
+            print(f"视频将保存到: {output_path}")
+
+        # 获取目标高度（选择三个图像中最常见的高度）
+        target_height = 240  
+        
+        # 调整所有图像到相同高度，保持宽高比
+        def resize_to_height(img, target_height):
+            h, w = img.shape[:2]
+            ratio = target_height / h
+            new_width = int(w * ratio)
+            return cv2.resize(img, (new_width, target_height))
+        
+        # 调整所有图像尺寸
+        head_img = resize_to_height(head_img, target_height)
+        combined_img = np.hstack((head_img))
+        
+        # 写入视频帧
+        self.video_writer.write(combined_img)
+
+        # 添加文本信息
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.7
+        font_color = (255, 255, 255)
+        thickness = 2
+        
+        # 获取各个图像的宽度用于文本定位
+        w_head = head_img.shape[1]
+        
+        # 添加相机标签
+        cv2.putText(combined_img, "Head Camera", (10, 30), font, font_scale, font_color, thickness)
+        
+        # 添加帧信息和时间戳
+        info_text = f"Frame: {frame_idx+1}/{total_frames}, Time: {time_stamp_i/1e9:.3f}s"
+        cv2.putText(combined_img, info_text, (10, target_height - 10), font, font_scale, font_color, thickness)
+        
+        # 显示图像
+        cv2.imshow("Three Camera Synchronization", combined_img)
+
+        delay = max(1, int(1000 / self.data_fps))  # 确保至少1ms延迟
+        key = cv2.waitKey(delay) & 0xFF
+        # 等待按键（1ms），按'q'退出
+        if key == ord('q'):
+            return False
+        elif key == ord(' '):  # 空格键暂停/继续
+            while True:
+                key2 = cv2.waitKey(0) & 0xFF
+                if key2 == ord(' '):  # 再次按空格继续
+                    break
+                elif key2 == ord('q'):  # 暂停状态下按q退出
+                    return False
+        
+        return True
+       
     def plot_interpolation_comparison(self, low_state_timestamps, joint_positions, matched_timestamps, joint_interp):
         """绘制插值前后的关节数据对比图并显示"""
         try:
@@ -300,7 +384,7 @@ class BagToNpyConverter:
         # 提取所有需要的消息
         if self.r_type == "1":
             topics_to_extract = [
-                '/camera/camera/color/image_raw',
+                '/camera/color/image_raw',
                 '/camera_left/color/image_raw', 
                 '/camera_right/color/image_raw',
                 '/low_state'
@@ -314,7 +398,7 @@ class BagToNpyConverter:
                     print(f"Warning: Topic {topic} not found in metadata")
                     extracted_data[topic] = []
             
-            head_camera_msgs = extracted_data['/camera/camera/color/image_raw']
+            head_camera_msgs = extracted_data['/camera/color/image_raw']
             left_camera_msgs = extracted_data['/camera_left/color/image_raw']
             right_camera_msgs = extracted_data['/camera_right/color/image_raw']
             low_state_msgs = extracted_data['/low_state']
@@ -444,7 +528,7 @@ class BagToNpyConverter:
         else:
             # 1. 解析头相机和low_state数据
             topics_to_extract = [
-                '/camera/camera/color/image_raw',
+                '/camera/color/image_raw',
                 '/low_state'
             ]
             
@@ -456,7 +540,7 @@ class BagToNpyConverter:
                     print(f"Warning: Topic {topic} not found in metadata")
                     extracted_data[topic] = []
             
-            head_camera_msgs = extracted_data['/camera/camera/color/image_raw']
+            head_camera_msgs = extracted_data['/camera/color/image_raw']
             low_state_msgs = extracted_data['/low_state']
 
             # 检查是否有足够的数据
@@ -484,7 +568,7 @@ class BagToNpyConverter:
 
             print(f"head Image的分辨为: height*width = {head_camera_msgs[0][1].height}*{head_camera_msgs[0][1].width}\n")
             
-            for i in enumerate(head_camera_msgs):
+            for i, _ in enumerate(head_camera_msgs):
                 # 获取图像
                 head_img, cv_head_img = self.image_msg_to_numpy(head_camera_msgs[i][1])
                 
@@ -493,8 +577,8 @@ class BagToNpyConverter:
                 
                 step_data = {
                     'image': head_img,
-                    'l_wrist_image': left_img,
-                    'r_wrist_image': right_img,
+                    'l_wrist_image': None,
+                    'r_wrist_image': None,
                     'joint_pos': np.array(joint_pos[2:16], dtype=np.float32), # 只保留手臂相关的14个关节
                     'eef_pos': np.array(eef_pos, dtype=np.float32),
                     'action': np.zeros(14, dtype=np.float32),
@@ -507,22 +591,23 @@ class BagToNpyConverter:
                     filename = f"episode_teleop_step_{i//100}.npy"
                     output_path = os.path.join(self.output_dir, filename)
                     np.save(output_path, all_step_data)        
-                    print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
+                    print(f"Processed {i+1}/{len(head_camera_msgs)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
                     all_step_data = []
                 elif i == len(head_camera_msgs) - 1:
                     filename = f"episode_teleop_step_{(i//100)}.npy"
                     output_path = os.path.join(self.output_dir, filename)
                     np.save(output_path, all_step_data)        
-                    print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
+                    print(f"Processed {i+1}/{len(head_camera_msgs)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
                 
+                time_stamp_i = head_camera_msgs[i][0]
                 # 相机图像可视化
-                # if self.data_visualization:
-                #     continue_rendering = self.visualize_three_cameras(
-                #         cv_head_img, cv_left_img, cv_right_img, t_sync, i, len(matches)
-                #     )
-                #     if not continue_rendering:
-                #         print("用户中断了可视化")
-                #         break
+                if self.data_visualization:
+                    continue_rendering = self.visualize_head_cameras(
+                        cv_head_img, i, time_stamp_i,len(head_camera_msgs)
+                    )
+                    if not continue_rendering:
+                        print("用户中断了可视化")
+                        break
 
     def close(self):
         """关闭数据库连接"""
@@ -533,8 +618,8 @@ def main():
     
     parser = argparse.ArgumentParser(description='Convert ROS2 bag to NPY format')
     parser.add_argument('--bag_path', help='Path to the ROS2 bag directory')
-    parser.add_argument('--output_dir', help='Output directory for NPY files')
-    parser.add_argument("--r_type", type=str, choices=["1", "2"], default="1", help="value '1': three cameras data collection; value '2': head camera data collection")
+    parser.add_argument('--output_dir', default="./data", help='Output directory for NPY files')
+    parser.add_argument("--r_type", choices=["1", "2"], default="1", help="value '1': three cameras data collection; value '2': head camera data collection")
     
     args = parser.parse_args()
     
