@@ -24,11 +24,11 @@ matplotlib.use('TkAgg')  # 使用非交互式后端
 import matplotlib.pyplot as plt
 
 class BagToNpyConverter:
-    def __init__(self, bag_path, output_dir, data_visualization=True):
+    def __init__(self, bag_path, output_dir, r_type, data_visualization=True):
         self.bag_path = bag_path
         self.output_dir = output_dir
         self.data_fps = 30  # 数据采样频率为30Hz
-        
+        self.r_type = r_type  # 记录类型："1": 三相机数据和joint postion；"2": 头相机和joint postion
         os.makedirs(output_dir, exist_ok=True)
         
         # 读取rosbag2的文件
@@ -51,7 +51,7 @@ class BagToNpyConverter:
     
         self.data_visualization = data_visualization  # 是否可视化图像
 
-        self.kinematics_solver = ArmKinematicsSolver("./../booster_dataset/utils/T1_7_dof_arm_serial_with_head_arm.urdf")
+        self.kinematics_solver = ArmKinematicsSolver("./../booster_dataset/utils/T1_7DofArm_Serial.urdf")
 
     def extract_messages(self, topic_name):
         """从数据库中提取指定主题的所有消息"""
@@ -298,148 +298,231 @@ class BagToNpyConverter:
     def process_bag(self):
         """处理整个bag文件"""
         # 提取所有需要的消息
-        topics_to_extract = [
-            '/camera/camera/color/image_raw',
-            '/camera_left/color/image_raw', 
-            '/camera_right/color/image_raw',
-            '/low_state'
-        ]
-        
-        extracted_data = {}
-        for topic in topics_to_extract:
-            if topic in self.msg_types:
-                extracted_data[topic] = self.extract_messages(topic)
-            else:
-                print(f"Warning: Topic {topic} not found in metadata")
-                extracted_data[topic] = []
-        
-        head_camera_msgs = extracted_data['/camera/camera/color/image_raw']
-        left_camera_msgs = extracted_data['/camera_left/color/image_raw']
-        right_camera_msgs = extracted_data['/camera_right/color/image_raw']
-        low_state_msgs = extracted_data['/low_state']
+        if self.r_type == "1":
+            topics_to_extract = [
+                '/camera/camera/color/image_raw',
+                '/camera_left/color/image_raw', 
+                '/camera_right/color/image_raw',
+                '/low_state'
+            ]
+            
+            extracted_data = {}
+            for topic in topics_to_extract:
+                if topic in self.msg_types:
+                    extracted_data[topic] = self.extract_messages(topic)
+                else:
+                    print(f"Warning: Topic {topic} not found in metadata")
+                    extracted_data[topic] = []
+            
+            head_camera_msgs = extracted_data['/camera/camera/color/image_raw']
+            left_camera_msgs = extracted_data['/camera_left/color/image_raw']
+            right_camera_msgs = extracted_data['/camera_right/color/image_raw']
+            low_state_msgs = extracted_data['/low_state']
 
-        # 检查是否有足够的数据
-        if not head_camera_msgs:
-            print("Error: No head camera messages found")
-            return
-        if not left_camera_msgs:
-            print("Error: No left camera messages found")
-            return
-        if not right_camera_msgs:
-            print("Error: No right camera messages found")
-            return
-        if not low_state_msgs:
-            print("Error: No low state messages found")
-            return
-        
-        # 1. 找到三个相机时间戳最对齐的三元组
-        matches = self.sync_three_cameras(
-            head_camera_msgs, left_camera_msgs, right_camera_msgs, max_skew_ns=30_000_000
-        )
-        
-        if not matches:
-            print("No valid triplet matches found!")
-            return
-        
-        # 2. 从LowState消息中提取关节位置
-        low_state_timestamps = [msg[0] for msg in low_state_msgs]
-        joint_positions = []
-        
-        for _, msg in low_state_msgs:
-            if hasattr(msg, 'motor_state_serial') and len(msg.motor_state_serial) > 0:
-                joint_pos = [motor.q for motor in msg.motor_state_serial]
-                joint_positions.append(joint_pos)
-            else:
-                joint_positions.append([])
-                
-        
-        # 3. 创建插值函数用于关节数据
-        joint_positions = np.array(joint_positions, dtype=np.float32)
-        if len(low_state_timestamps) > 1 and len(joint_positions) > 0:
-            joint_interp = interp1d(
-                low_state_timestamps, 
-                joint_positions, 
-                axis=0,
-                kind='linear',  # 使用线性插值， 5次多项式插值 cubic样条插值会有过冲
-                bounds_error=False,  # 不允许外推
-                fill_value='extrapolate'  # 但实际上我们已经确保不会外推
+            # 检查是否有足够的数据
+            if not head_camera_msgs:
+                print("Error: No head camera messages found")
+                return
+            if not left_camera_msgs:
+                print("Error: No left camera messages found")
+                return
+            if not right_camera_msgs:
+                print("Error: No right camera messages found")
+                return
+            if not low_state_msgs:
+                print("Error: No low state messages found")
+                return
+            
+            # 1. 找到三个相机时间戳最对齐的三元组
+            matches = self.sync_three_cameras(
+                head_camera_msgs, left_camera_msgs, right_camera_msgs, max_skew_ns=30_000_000
             )
-        else:
-            print("Not enough data for interpolation")
-            return
-        
-        # 检查同步时间是否在 LowState 时间范围内
-        t_sync_start = matches[0][0]
-        t_sync_end = matches[-1][0]
-        if t_sync_start < low_state_timestamps[0] or t_sync_end > low_state_timestamps[-1]:
-            print(f"警告: 同步时间 {t_sync} 超出 LowState 时间范围 [{low_state_timestamps[0]}, {low_state_timestamps[-1]}]")
-            return
-
-        # 4. 处理每个匹配的三元组
-        all_step_data = []
-        print("Processing matched triplets...")
-        output_path = os.path.join(self.output_dir, 'episode_teleop.npy')
-
-        print(f"head Image的分辨为: height*width = {head_camera_msgs[0][1].height}*{head_camera_msgs[0][1].width}\n",
-              f"left Image的分辨为: height*width = {left_camera_msgs[0][1].height}*{left_camera_msgs[0][1].width}\n",
-              f"right Image的分辨为: height*width = {right_camera_msgs[0][1].height}*{right_camera_msgs[0][1].width}\n")
-        
-        for i, (t_sync, head_idx, left_idx, right_idx) in enumerate(matches):
-            # 获取图像
-            head_img, cv_head_img = self.image_msg_to_numpy(head_camera_msgs[head_idx][1])
-            left_img, cv_left_img = self.image_msg_to_numpy(left_camera_msgs[left_idx][1])
-            right_img, cv_right_img = self.image_msg_to_numpy(right_camera_msgs[right_idx][1])
             
-            if head_img is None or left_img is None or right_img is None:
-                continue
+            if not matches:
+                print("No valid triplet matches found!")
+                return
             
-            # 插值获取关节位置和末端执行器位置
-            joint_pos = joint_interp(t_sync)
-            eef_pos = self.kinematics_solver.compute_arm_eef(joint_pos)
+            # 2. 从LowState消息中提取关节位置
+            low_state_timestamps = [msg[0] for msg in low_state_msgs]
+            joint_positions = []
             
-            step_data = {
-                'image': head_img,
-                'l_wrist_image': left_img,
-                'r_wrist_image': right_img,
-                'joint_pos': np.array(joint_pos[2:16], dtype=np.float32), # 只保留手臂相关的14个关节
-                'eef_pos': np.array(eef_pos, dtype=np.float32),
-                'action': np.zeros(14, dtype=np.float32),
-                'language_instruction': 'robot teleoperation',
-            }
+            for _, msg in low_state_msgs:
+                if hasattr(msg, 'motor_state_serial') and len(msg.motor_state_serial) > 0:
+                    joint_pos = [motor.q for motor in msg.motor_state_serial]
+                    joint_positions.append(joint_pos)
+                else:
+                    joint_positions.append([])
+                    
             
-            all_step_data.append(step_data)
-            
-            if (i+1) % 100 == 0 and i > 0:
-                filename = f"episode_teleop_step_{i//100}.npy"
-                output_path = os.path.join(self.output_dir, filename)
-                np.save(output_path, all_step_data)        
-                print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
-                all_step_data = []
-            elif i == len(matches) - 1:
-                filename = f"episode_teleop_step_{(i//100)}.npy"
-                output_path = os.path.join(self.output_dir, filename)
-                np.save(output_path, all_step_data)        
-                print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
-            
-            # 相机图像可视化
-            if self.data_visualization:
-                continue_rendering = self.visualize_three_cameras(
-                    cv_head_img, cv_left_img, cv_right_img, t_sync, i, len(matches)
+            # 3. 创建插值函数用于关节数据
+            joint_positions = np.array(joint_positions, dtype=np.float32)
+            if len(low_state_timestamps) > 1 and len(joint_positions) > 0:
+                joint_interp = interp1d(
+                    low_state_timestamps, 
+                    joint_positions, 
+                    axis=0,
+                    kind='linear',  # 使用线性插值， 5次多项式插值 cubic样条插值会有过冲
+                    bounds_error=False,  # 不允许外推
+                    fill_value='extrapolate'  # 但实际上我们已经确保不会外推
                 )
-                if not continue_rendering:
-                    print("用户中断了可视化")
-                    break
+            else:
+                print("Not enough data for interpolation")
+                return
+            
+            # 检查同步时间是否在 LowState 时间范围内
+            t_sync_start = matches[0][0]
+            t_sync_end = matches[-1][0]
+            if t_sync_start < low_state_timestamps[0] or t_sync_end > low_state_timestamps[-1]:
+                print(f"警告: 同步时间 {t_sync} 超出 LowState 时间范围 [{low_state_timestamps[0]}, {low_state_timestamps[-1]}]")
+                return
 
-        # 5. 绘制并显示插值对比图
-        if self.data_visualization:
-            matched_timestamps = [m[0] for m in matches]
-            self.plot_interpolation_comparison(
-                low_state_timestamps, 
-                joint_positions, 
-                matched_timestamps, 
-                joint_interp
-            )              
+            # 4. 处理每个匹配的三元组
+            all_step_data = []
+            print("Processing matched triplets...")
+            output_path = os.path.join(self.output_dir, 'episode_teleop.npy')
 
+            print(f"head Image的分辨为: height*width = {head_camera_msgs[0][1].height}*{head_camera_msgs[0][1].width}\n",
+                f"left Image的分辨为: height*width = {left_camera_msgs[0][1].height}*{left_camera_msgs[0][1].width}\n",
+                f"right Image的分辨为: height*width = {right_camera_msgs[0][1].height}*{right_camera_msgs[0][1].width}\n")
+            
+            for i, (t_sync, head_idx, left_idx, right_idx) in enumerate(matches):
+                # 获取图像
+                head_img, cv_head_img = self.image_msg_to_numpy(head_camera_msgs[head_idx][1])
+                left_img, cv_left_img = self.image_msg_to_numpy(left_camera_msgs[left_idx][1])
+                right_img, cv_right_img = self.image_msg_to_numpy(right_camera_msgs[right_idx][1])
+                
+                if head_img is None or left_img is None or right_img is None:
+                    continue
+                
+                # 插值获取关节位置和末端执行器位置
+                joint_pos = joint_interp(t_sync)
+                eef_pos = self.kinematics_solver.compute_arm_eef(joint_pos)
+                
+                step_data = {
+                    'image': head_img,
+                    'l_wrist_image': left_img,
+                    'r_wrist_image': right_img,
+                    'joint_pos': np.array(joint_pos[2:16], dtype=np.float32), # 只保留手臂相关的14个关节
+                    'eef_pos': np.array(eef_pos, dtype=np.float32),
+                    'action': np.zeros(14, dtype=np.float32),
+                    'language_instruction': 'robot teleoperation',
+                }
+                
+                all_step_data.append(step_data)
+                
+                if (i+1) % 100 == 0 and i > 0:
+                    filename = f"episode_teleop_step_{i//100}.npy"
+                    output_path = os.path.join(self.output_dir, filename)
+                    np.save(output_path, all_step_data)        
+                    print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
+                    all_step_data = []
+                elif i == len(matches) - 1:
+                    filename = f"episode_teleop_step_{(i//100)}.npy"
+                    output_path = os.path.join(self.output_dir, filename)
+                    np.save(output_path, all_step_data)        
+                    print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
+                
+                # 相机图像可视化
+                if self.data_visualization:
+                    continue_rendering = self.visualize_three_cameras(
+                        cv_head_img, cv_left_img, cv_right_img, t_sync, i, len(matches)
+                    )
+                    if not continue_rendering:
+                        print("用户中断了可视化")
+                        break
+
+            # 5. 绘制并显示插值对比图
+            if self.data_visualization:
+                matched_timestamps = [m[0] for m in matches]
+                self.plot_interpolation_comparison(
+                    low_state_timestamps, 
+                    joint_positions, 
+                    matched_timestamps, 
+                    joint_interp
+                )              
+        # 如果只记录头相机和关节位置
+        else:
+            # 1. 解析头相机和low_state数据
+            topics_to_extract = [
+                '/camera/camera/color/image_raw',
+                '/low_state'
+            ]
+            
+            extracted_data = {}
+            for topic in topics_to_extract:
+                if topic in self.msg_types:
+                    extracted_data[topic] = self.extract_messages(topic)
+                else:
+                    print(f"Warning: Topic {topic} not found in metadata")
+                    extracted_data[topic] = []
+            
+            head_camera_msgs = extracted_data['/camera/camera/color/image_raw']
+            low_state_msgs = extracted_data['/low_state']
+
+            # 检查是否有足够的数据
+            if not head_camera_msgs:
+                print("Error: No head camera messages found")
+                return
+            if not low_state_msgs:
+                print("Error: No low state messages found")
+                return
+            
+            # 2. 从LowState消息中提取关节位置
+            low_state_timestamps = [msg[0] for msg in low_state_msgs]
+            joint_positions = []
+            
+            for _, msg in low_state_msgs:
+                if hasattr(msg, 'motor_state_serial') and len(msg.motor_state_serial) > 0:
+                    joint_pos = [motor.q for motor in msg.motor_state_serial]
+                    joint_positions.append(joint_pos)
+                else:
+                    joint_positions.append([])
+
+            # 3. 处理数据生成step_data
+            all_step_data = []
+            output_path = os.path.join(self.output_dir, 'episode_teleop.npy')
+
+            print(f"head Image的分辨为: height*width = {head_camera_msgs[0][1].height}*{head_camera_msgs[0][1].width}\n")
+            
+            for i in enumerate(head_camera_msgs):
+                # 获取图像
+                head_img, cv_head_img = self.image_msg_to_numpy(head_camera_msgs[i][1])
+                
+                joint_pos = joint_positions[i]
+                eef_pos = self.kinematics_solver.compute_arm_eef(joint_pos)
+                
+                step_data = {
+                    'image': head_img,
+                    'l_wrist_image': left_img,
+                    'r_wrist_image': right_img,
+                    'joint_pos': np.array(joint_pos[2:16], dtype=np.float32), # 只保留手臂相关的14个关节
+                    'eef_pos': np.array(eef_pos, dtype=np.float32),
+                    'action': np.zeros(14, dtype=np.float32),
+                    'language_instruction': 'robot teleoperation',
+                }
+                
+                all_step_data.append(step_data)
+                
+                if (i+1) % 100 == 0 and i > 0:
+                    filename = f"episode_teleop_step_{i//100}.npy"
+                    output_path = os.path.join(self.output_dir, filename)
+                    np.save(output_path, all_step_data)        
+                    print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
+                    all_step_data = []
+                elif i == len(head_camera_msgs) - 1:
+                    filename = f"episode_teleop_step_{(i//100)}.npy"
+                    output_path = os.path.join(self.output_dir, filename)
+                    np.save(output_path, all_step_data)        
+                    print(f"Processed {i+1}/{len(matches)} triplets, Saved {len(all_step_data)} synchronized frames to {output_path}" )
+                
+                # 相机图像可视化
+                # if self.data_visualization:
+                #     continue_rendering = self.visualize_three_cameras(
+                #         cv_head_img, cv_left_img, cv_right_img, t_sync, i, len(matches)
+                #     )
+                #     if not continue_rendering:
+                #         print("用户中断了可视化")
+                #         break
 
     def close(self):
         """关闭数据库连接"""
@@ -451,6 +534,7 @@ def main():
     parser = argparse.ArgumentParser(description='Convert ROS2 bag to NPY format')
     parser.add_argument('--bag_path', help='Path to the ROS2 bag directory')
     parser.add_argument('--output_dir', help='Output directory for NPY files')
+    parser.add_argument("--r_type", type=str, choices=["1", "2"], default="1", help="value '1': three cameras data collection; value '2': head camera data collection")
     
     args = parser.parse_args()
     
@@ -458,7 +542,7 @@ def main():
     # 初始化ROS2（用于消息反序列化）
     rclpy.init()
     
-    converter = BagToNpyConverter(args.bag_path, args.output_dir, True)
+    converter = BagToNpyConverter(args.bag_path, args.output_dir, args.r_type,True)
     
     try:
         converter.process_bag()
