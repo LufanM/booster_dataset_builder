@@ -44,7 +44,11 @@
 
 * **[pinocchio](https://github.com/stack-of-tasks/pinocchio)库安装**
 
-  该库主要是为了提供FK的计算，通过**robotpkg**包管理器把pinocchio安装下来（具体参考官网提供的[linux](https://stack-of-tasks.github.io/pinocchio/download.html)安装步骤）
+  该库主要是为了提供FK的计算，如果您已经通过robotpkg包管理器把pinocchio安装下来了，请跳过。如果没有，可直接使用pip进行安装(因为不需要引入casadi等嵌入的库)
+
+  ```bash
+  python3 -m pip install pin
+  ```
 
 * **其余包安装**
 
@@ -81,12 +85,12 @@ ros2 launch orbbec_camera multi_camera.launch.py
    ```bash
    conda activate rlds_env
    cd booster_dataset_builder/booster_dataset
-   rlds build --overwrite 
+   tfds build --overwrite 
    ```
 
 ## 2.2 基于Ros2bag实时保存数据
 
-主要流程为:
+主要流程为下:
 
 1. 进入感知板
 
@@ -94,26 +98,62 @@ ros2 launch orbbec_camera multi_camera.launch.py
    ssh booster@192.168.10.102  # 连接网线后的进入方式，否则需要知道感知板ip地址
    ```
 
-2. 实时保存数据
+2. 拉取**booster_robotics_sdk_ros2**库，安装自定义msg，以便订阅与joint state相关的消息
+
+   ```bash
+   git clone git@gitee.com:booster_robotics/booster_robotics_sdk_ros2.git
+   colcon build
+   cd booster_robotics_sdk_ros2/booster_ros2_interfac
+   source install/setup.bash
+   ```
+
+   然后再打印一下`/low_state/`，如果有消息输出代表成功
+
+   ```bash
+   ros2 topic echo /low_state
+   ```
+
+3. 实时保存数据，确保已经安装了pinocchio库
+
+   开始前需要需要相机有消息数据传输
+
+   ```bash
+   ros2 topic echo /camera/color/image_raw # 如果机器人相机是realSense改为/camera/camera/color/image_raw
+   ```
+
+   不为空代表有数据传输，接着
 
    ```bash
    cd ~/Workspace
    source  booster_robotics_sdk_ros2/booster_ros2_interface/install/setup.bash
-   ros2 bag record topics /camera_right/color/image_raw     /camera_left/color/image_raw /camera/camera/color/image_raw /low_state
+   ros2 bag record topics /camera/color/image_raw /low_state
+   # 同样如果机器人相机是realSense，话题名改为/camera/camera/color/image_raw
+   # 如果需要3个相机的数据泽运行下面代码
+   # ros2 bag record topics /camera_right/color/image_raw /camera_left/color/image_raw /camera/camera/color/image_raw /low_state
    ```
 
-3. 运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2 bag转换成.npy数据，ros2 bag的数据文件需放置于`rosbag_2_npy.py`同级文件夹中。转换后会在统计文件的`./data`生成`.npy`格式数据，然后拷贝至booster_dataset/data/的train或者val文件夹中，以便进行RLDS格式转换。
+4. 运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2 bag转换成.npy数据，ros2 bag的数据文件需放置于`rosbag_2_npy.py`同级文件夹中。转换后会在统计文件的`./data`生成`.npy`格式数据，然后拷贝至booster_dataset/data/的train或者val文件夹中，以便进行RLDS格式转换。（建议在自己的pc上操作，但在自己的pc上操作，要确保进行了步骤2）
 
    ```bash
-   python ros2_data_process/rosbag_2_npy.py --bag_path=./your_rosbag2_file_name --output_dir=./
+   python ros2_data_process/rosbag_2_npy.py --bag_path=./your_rosbag2_file_name --output_dir=./data --r_type=2
    ```
 
-4. 最后进行RLDS转换，保证`booster_dataset/data/`的train和val都有episode文件再进行转换，转换如下，详情参考下面**RLDS Dataset Conversion**章节。
+   * 参数含义：
+
+     `bag_path`为：ros2 bag包的文件名，eg：rosbag2_2025_10_20-20_29_05
+
+     `output_dir`为：生成数据的文件路径
+     
+     `--r_type=1`代表：采集三个相机（2个手腕相机，1个头部相机）和关节的数据
+     
+     `--r_type=2`代表：采集头部相机和关节的数据
+
+4. 最后进行RLDS转换，保证`booster_dataset/data/`的train和val都有episode文件再进行转换，转换如下，详情参考下面**RLDS Dataset Conversion**章节。（建议在自己的pc上操作，因为我们默认没有给机器人装conda）
 
    ```bash
    conda activate rlds_env
    cd booster_dataset_builder/booster_dataset
-   rlds build --overwrite 
+   tfds build --overwrite 
    ```
 
 # 3 RLDS Dataset Conversion

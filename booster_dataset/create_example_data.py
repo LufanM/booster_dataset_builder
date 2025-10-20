@@ -2,10 +2,10 @@ import numpy as np
 import tqdm
 import os
 
-N_TRAIN_EPISODES = 100
-N_VAL_EPISODES = 100
+N_TRAIN_EPISODES = 10
+N_VAL_EPISODES = 10
 
-EPISODE_LENGTH = 10
+EPISODE_LENGTH = 5
 
 
 def create_fake_episode(path):

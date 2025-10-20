@@ -193,8 +193,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-3.31"
-      upper="1.22"
+      lower="-3.29"
+      upper="1.18"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -242,8 +242,8 @@
     <axis
       xyz="1 0 0" />
     <limit
-      lower="-1.74"
-      upper="1.57"
+      lower="-1.577"
+      upper="1.7055"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -277,14 +277,6 @@
           rgba="0.4 0.4 0.4 0.3" />
       </material>
     </visual>
-    <collision>
-      <origin
-        xyz="0 0.05 0"
-        rpy="1.5708 0 0" />
-      <geometry>
-        <cylinder radius="0.03" length="0.15" />
-      </geometry>
-    </collision>
   </link>
   <joint
     name="Left_Elbow_Pitch"
@@ -299,8 +291,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-2.27"
-      upper="2.27"
+      lower="-2.234"
+      upper="2.234"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -311,7 +303,7 @@
         xyz="-0.00046851 0.062372 0.0015178"
         rpy="0 0 0" />
       <mass
-        value="0.2984" />
+        value="0.5570" />
       <inertia
         ixx="0.001673"
         ixy="-1.2E-05"
@@ -320,14 +312,6 @@
         iyz="4E-06"
         izz="0.001608" />
     </inertial>
-    <collision>
-      <origin
-        xyz="0 0.08 0"
-        rpy="1.5708 0 0" />
-      <geometry>
-        <cylinder radius="0.04" length="0.14" />
-      </geometry>
-    </collision>
     <visual>
       <origin
         xyz="0 0 0"
@@ -356,8 +340,8 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-2.27"
-      upper="2.27"
+      lower="-2.1402"
+      upper="1.6844"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -368,7 +352,7 @@
         xyz="-3.8402E-05 0.036076 0.0056711"
         rpy="0 0 0" />
       <mass
-        value="0.42219" />
+        value="0.43402" />
       <inertia
         ixx="0.000823"
         ixy="0"
@@ -405,10 +389,10 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-2.27"
-      upper="2.27"
-      effort="18"
-      velocity="18.84" />
+      lower="-2.5821"
+      upper="2.5821"
+      effort="7"
+      velocity="12.56" />
   </joint>
   <link
     name="AL6">
@@ -417,7 +401,7 @@
         xyz="-0.00072939 0.056578 -0.0056257"
         rpy="0 0 0" />
       <mass
-        value="0.26532" />
+        value="0.47922" />
       <inertia
         ixx="0.001171"
         ixy="-1.5E-05"
@@ -454,8 +438,8 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-2.27"
-      upper="2.27"
+      lower="-1.8185"
+      upper="1.4261"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -466,23 +450,15 @@
         xyz="-0.0067917 0.06373 0.011867"
         rpy="0 0 0" />
       <mass
-        value="0.24875" />
+        value="0.30603" />
       <inertia
-        ixx="0.001568"
-        ixy="-9.4E-05"
-        ixz="-1.9E-05"
-        iyy="0.000259"
-        iyz="0.000214"
-        izz="0.001609" />
+        ixx="0.002302"
+        ixy="0.000002"
+        ixz="0.000000"
+        iyy="0.000307"
+        iyz="-0.000108"
+        izz="0.002439" />
     </inertial>
-    <collision>
-      <origin
-        xyz="0 0.1 0"
-        rpy="1.5708 0 0" />
-      <geometry>
-        <cylinder radius="0.06" length="0.15" />
-      </geometry>
-    </collision>
     <visual>
       <origin
         xyz="0 0 0"
@@ -511,10 +487,10 @@
     <axis
       xyz="1 0 0" />
     <limit
-      lower="-2.27"
-      upper="2.27"
-      effort="18"
-      velocity="18.84" />
+      lower="-0.758"
+      upper="1.4285"
+      effort="7"
+      velocity="12.56" />
   </joint>
   <link
     name="AR1">
@@ -560,8 +536,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-3.31"
-      upper="1.22"
+      lower="-3.29"
+      upper="1.1868"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -609,8 +585,8 @@
     <axis
       xyz="1 0 0" />
     <limit
-      lower="-1.57"
-      upper="1.74"
+      lower="-1.7055"
+      upper="1.577"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -644,14 +620,6 @@
           rgba="0.4 0.4 0.4 0.3" />
       </material>
     </visual>
-    <collision>
-      <origin
-        xyz="0 -0.05 0"
-        rpy="1.5708 0 0" />
-      <geometry>
-        <cylinder radius="0.03" length="0.15" />
-      </geometry>
-    </collision>
   </link>
   <joint
     name="Right_Elbow_Pitch"
@@ -666,8 +634,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-2.27"
-      upper="2.27"
+      lower="-2.234"
+      upper="2.234"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -678,7 +646,7 @@
         xyz="-0.0004573 -0.067734 0.0017465"
         rpy="0 0 0" />
       <mass
-        value="0.3599" />
+        value="0.5570" />
       <inertia
         ixx="0.002292"
         ixy="1.4E-05"
@@ -687,14 +655,6 @@
         iyz="-5E-06"
         izz="0.002223" />
     </inertial>
-    <collision>
-      <origin
-        xyz="0 -0.08 0"
-        rpy="1.5708 0 0" />
-      <geometry>
-        <cylinder radius="0.04" length="0.14" />
-      </geometry>
-    </collision>
     <visual>
       <origin
         xyz="0 0 0"
@@ -723,8 +683,8 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-2.27"
-      upper="2.27"
+      lower="-1.6844"
+      upper="2.1402"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -772,10 +732,10 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-2.27"
-      upper="2.27"
-      effort="18"
-      velocity="18.84" />
+      lower="-2.5821"
+      upper="2.5821"
+      effort="7"
+      velocity="12.56" />
   </joint>
   <link
     name="AR6">
@@ -784,7 +744,7 @@
         xyz="-0.0011437 -0.056205 -0.0056621"
         rpy="0 0 0" />
       <mass
-        value="0.28215" />
+        value="0.47922" />
       <inertia
         ixx="0.001238"
         ixy="2.4E-05"
@@ -821,8 +781,8 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-2.27"
-      upper="2.27"
+      lower="-1.4261"
+      upper="1.8185"
       effort="18"
       velocity="18.84" />
   </joint>
@@ -833,23 +793,15 @@
         xyz="-0.0047758 -0.064411 0.011992"
         rpy="0 0 0" />
       <mass
-        value="0.24612" />
+        value="0.30603" />
       <inertia
-        ixx="0.001568"
-        ixy="8.4E-05"
-        ixz="-1.5E-05"
-        iyy="0.00025"
-        iyz="-0.000214"
-        izz="0.0016" />
+        ixx="0.002287"
+        ixy="-0.000002"
+        ixz="0.000000"
+        iyy="0.000292"
+        iyz="-0.000102"
+        izz="0.002418" />
     </inertial>
-    <collision>
-      <origin
-        xyz="0 -0.1 0"
-        rpy="1.5708 0 0" />
-      <geometry>
-        <cylinder radius="0.06" length="0.15" />
-      </geometry>
-    </collision>
     <visual>
       <origin
         xyz="0 0 0"
@@ -878,11 +830,12 @@
     <axis
       xyz="1 0 0" />
     <limit
-      lower="-2.27"
-      upper="2.27"
-      effort="18"
-      velocity="18.84" />
+      lower="-1.4285"
+      upper="0.758"
+      effort="7"
+      velocity="12.56" />
   </joint>
+
   <link
     name="Waist">
     <inertial>
@@ -915,7 +868,7 @@
     </visual>
   </link>
   <joint
-    name="Waist"
+    name="Waist_Joint"
     type="revolute">
     <origin
       xyz="0.0625 0 -0.1155"
@@ -1210,7 +1163,7 @@
       <mass
         value="0.685" />
       <inertia
-        ixx="0.002214"
+        ixx="0.000738"
         ixy="0.000000"
         ixz="-0.000147"
         iyy="0.002385"
@@ -1536,7 +1489,7 @@
       <mass
         value="0.685" />
       <inertia
-        ixx="0.002214"
+        ixx="0.000738"
         ixy="0.000000"
         ixz="-0.000147"
         iyy="0.002385"

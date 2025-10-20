@@ -5,3 +5,4 @@ booster_dataset/rlds_data/**
 *.pyc
 *.egg-info
 *.vscode*
+# rosbag2*
