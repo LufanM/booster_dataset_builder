@@ -57,12 +57,15 @@ class DataCollector:
         
     def update_images(self, left_img, right_img, head_img):
     # def update_images(self, left_img, right_img):
-    # def update_images(self, head_img):
         timestamp = time.perf_counter()
         with self.lock:
             self.image_buffer.append((timestamp, left_img, right_img, head_img))
             # self.image_buffer.append((timestamp, left_img, right_img, None))
-            # self.image_buffer.append((timestamp, None, None, head_img))
+
+    def update_images(self, head_img):
+        timestamp = time.perf_counter()
+        with self.lock:
+            self.image_buffer.append((timestamp, None, None, head_img))
 
     def update_joints_state(self, joint_pos):
         timestamp = time.perf_counter()
@@ -89,12 +92,12 @@ class DataCollector:
             # 创建数据点
             step_data = {
                 'image': img_data[3],  # 使用头相机作为主图像
-                'l_wrist_image': img_data[1],  # 使用左相机作为左手腕图像
-                'r_wrist_image': img_data[2],  # 使用右相机作为右手腕图像
+                'l_wrist_image': img_data[1],  # 使用左相机作为左手腕图像。没有则为None
+                'r_wrist_image': img_data[2],  # 使用右相机作为右手腕图像。没有则为None
                 'joint_pos': np.array(joint_pos, dtype=np.float32),
                 'eef_pos': np.array(eef_pos, dtype=np.float32),
                 'action': np.zeros(14, dtype=np.float32),  # 占位符动作
-                'language_instruction': 'robot teleoperation',
+                'language_instruction': 'robot teleoperation', # 根据实际情况修改
             }
             
             self.current_episode.append(step_data)
@@ -156,7 +159,7 @@ class DataCollector:
 
         self.logger.info(f"数据收集器已停止，共保存 {self.episode_count + (1 if self.current_episode else 0)} 个 episode")
         
-class CameraSubscriber(Node):
+class ThreeCameraSubscriber(Node):
     def __init__(self, data_collector, cv_show=False):
         super().__init__('synch_camera_subscriber')
         self.data_collector = data_collector
@@ -175,7 +178,6 @@ class CameraSubscriber(Node):
         self.sync = ApproximateTimeSynchronizer(
             [self.head_sub, self.left_sub, self.right_sub],
             # [self.left_sub, self.right_sub],
-            # [self.head_sub],
             queue_size=20,
             slop=0.1
         )
@@ -205,9 +207,8 @@ class CameraSubscriber(Node):
             self.get_logger().error(f"手动图像转换失败: {str(e)}")
             return None
         
-    def sync_callback(self, head_msg, left_msg, right_msg):       
+    def sync_callback(self, head_msg, left_msg=None, right_msg=None):       
     # def sync_callback(self, left_msg, right_msg):
-    # def sync_callback(self, head_msg):
         """处理同步后的相机帧"""
         self.message_count += 1
         current_time = time.time()
@@ -231,8 +232,7 @@ class CameraSubscriber(Node):
         # 存储图像数据（状态数据将在状态处理器中添加）
         self.data_collector.update_images(left_img, right_img, head_img)
         # self.data_collector.update_images(left_img, right_img)
-        # self.data_collector.update_images(head_img)
-
+        
         if self.cv_render_flag and left_img is not None and right_img is not None:
             try:
                 # 调整图像大小
@@ -273,6 +273,71 @@ class CameraSubscriber(Node):
     def __del__(self):
         cv2.destroyAllWindows()
 
+class HeadCameraSubscriber(Node):
+    def __init__(self, data_collector, cv_show=False):
+        super().__init__('synch_camera_subscriber')
+        self.data_collector = data_collector
+        
+        self.message_count = 0
+        self.start_time = time.time()
+        self.cv_render_flag = cv_show
+        self.last_frame_time = time.time()  # 上一帧时间
+
+        # 创建相机订阅器
+        self.head_sub = Subscriber(self, Image, '/camera/camera/color/image_raw')
+        
+        # 创建时间同步器
+        self.sync = ApproximateTimeSynchronizer(
+            [self.head_sub],
+            queue_size=20,
+            slop=0.1
+        )
+        self.sync.registerCallback(self.sync_callback)
+        
+        if self.cv_render_flag:
+            cv2.namedWindow("Synchronized Stereo Cameras", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Synchronized Stereo Cameras", 1200, 400)
+        
+        self.max_diff_history = []
+        self.avg_delay_history = []
+
+    def manual_image_conversion(self, msg):
+        try:
+            if msg.encoding == 'bgr8':
+                cv_image = np.frombuffer(msg.data, dtype=np.uint8).reshape(
+                    msg.height, msg.width, 3)
+            elif msg.encoding == 'rgb8':
+                rgb_image = np.frombuffer(msg.data, dtype=np.uint8).reshape(
+                    msg.height, msg.width, 3)
+                cv_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+            else:
+                self.get_logger().error(f"不支持的编码格式: {msg.encoding}")
+                return None
+            return cv_image
+        except Exception as e:
+            self.get_logger().error(f"手动图像转换失败: {str(e)}")
+            return None
+        
+    def sync_callback(self, head_msg, left_msg=None, right_msg=None):       
+        """处理同步后的相机帧"""
+        self.message_count += 1
+        current_time = time.time()
+
+        # 计算帧率
+        frame_interval = current_time - self.last_frame_time
+        current_fps = 1.0 / frame_interval if frame_interval > 0 else 0
+        self.last_frame_time = current_time
+
+        # 每30帧打印一次信息
+        if self.message_count % 30 == 0:  
+            self.get_logger().info(f"\n=== 帧 #{self.message_count} | 帧率: {current_fps:.2f} Hz ===")
+            self.get_logger().info(f"收到头 图像: 高度={head_msg.height}, 宽度={head_msg.width},  编码={head_msg.encoding}")
+
+        head_img = self.manual_image_conversion(head_msg)
+        
+        # 存储图像数据（状态数据将在状态处理器中添加）
+        self.data_collector.update_images(head_img)
+
 class B1DataProcessor:
     def __init__(self, data_collector):
         self.data_collector = data_collector
@@ -287,9 +352,13 @@ class B1DataProcessor:
 # 全局退出标志和事件
 exit_flag = False
 exit_event = threading.Event()
-def run_ros_node(data_collector, exit_event):
+def run_ros_node(data_collector, r_type, exit_event):
     rclpy.init()
-    node = CameraSubscriber(data_collector)
+    if r_type == "1":
+        node = ThreeCameraSubscriber(data_collector, cv_show=False)
+    else:
+        node = HeadCameraSubscriber(data_collector, cv_show=False)
+
     try:
         while not exit_event.is_set():
             rclpy.spin_once(node, timeout_sec=0.1)
@@ -309,14 +378,14 @@ def signal_handler(sig, frame):
     exit_flag = True
     exit_event.set()
 
-def main():
+def main(r_type):
     global exit_flag, exit_event
     signal.signal(signal.SIGINT, signal_handler)
 
     data_collector = DataCollector(data_type="train", save_dir="data", episode_length=30 * 10)
     
     # 启动ROS相机订阅线程（30Hz）
-    ros_thread = threading.Thread(target=run_ros_node, args=(data_collector, exit_event))
+    ros_thread = threading.Thread(target=run_ros_node, args=(data_collector, r_type, exit_event))
     ros_thread.daemon = True
     ros_thread.start()
 
@@ -359,22 +428,12 @@ def main():
         print("保存queue中还未保存的数据...")
         data_collector.stop()
         print("数据收集器已停止")
-        # # 关闭关节状态订阅
-        # try:
-        #     channel_subscriber.CloseChannel()
-        #     print("关节状态订阅已关闭")
-        # except Exception as e:
-        #     print(f"关闭关节状态订阅时出错: {e}")re
-
-        # # 等待ROS线程结束
-        # ros_thread.join(timeout=2.0)
-        # if ros_thread.is_alive():
-        #     print("警告: ROS线程没有正常退出")
-        # else:
-        #     print("ROS线程已退出")
-        # print("程序退出完成")
         os._exit(0)
   
-
+import argparse
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Booster Teleoperation with Quest3")
+    parser.add_argument("--r_type", type=str, choices=["1", "2"], default="1", help="value '1': three cameras data collection; value '2': head camera data collection")
+    args = parser.parse_args()
+
+    main(args.r_type)
