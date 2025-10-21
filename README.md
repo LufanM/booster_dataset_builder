@@ -4,31 +4,29 @@
 
 * 直接实时保存数据：一种运行脚本`booster_dataset/create_booster_data_realtime.py`生成`.npy`格式的方式；
 
-* 基于Ros2bag实时保存数据：首先利用`ros2 bag record`方式生成一个数据包，然后运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2bag数据包转成`.npy`格式。
+* 基于ros2bag实时保存数据：首先利用`ros2 bag record`方式生成一个数据包，然后运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2bag数据包转成`.npy`格式。
 
-
-然后，`.npy`数据格式通过tfds build生成RLDS的数据集。
+`.npy`数据格式通过tfds build生成RLDS的数据集。
 
 # 1 依赖安装
 
-这里默认你已经安装过Booster Teleop的环境，熟悉大部分的安装细节。故这里只给出简略的安装步骤：
+安装之前建议先浏览**章节2**，确定哪些环境是您所需要安装的：
 
-> 因为该仓库需要在感知板运行，请务必于感知板进行安装
-
-* [**RLDS Dataset**](https://github.com/kpertsch/rlds_dataset_builder)仓库的基础环境安装
-
-  拉取该仓库
+* 拉取该仓库
 
   ```bash
   git clone git@github.com:LufanM/booster_dataset_builder.git
-  # 也可以从Booster Teleop项目中拉取子仓库booster_dataset_builder
+  # 也可以从booster_teleop项目中拉取子仓库booster_dataset_builder
+  # git clone git@github.com:LufanM/booster_teleop.git 
   # cd Booster Teleop
   # git submodule init
   # git submodule update
   # cd booster_dataset_builder
   ```
 
-  用conda创建数据生成的环境
+* RLDS数据格式基础环境安装（数据转换所需的环境）
+
+  用conda创建数据生成的环境，用于将`.npy`数据格式转RLDS格式。因为我们的机器人感知板没有安装conda，该步配置建议在您本地PC上进行；而数据采集需在感知板进行，数据采集不需要该环境。
 
   ```bash
   cd booster_dataset_builder
@@ -38,13 +36,13 @@
 
   如果您想手动创建环境，需要安装的关键软件包包括 `tensorflow`、`tensorflow_datasets`、`tensorflow_hub`、`apache_beam`、`matplotlib`、`plotly` 和 `wandb`
 
-* **booster_robotics_sdk 安装**（ros2 bag的方式录制数据可跳过该步骤）
+* **booster_robotics_sdk 安装**（ros2 bag的方式采集数据可跳过该步骤）
 
-  与Booster Teleop中的安装一致，从[T1说明书-V1.1](https://booster.feishu.cn/wiki/UvowwBes1iNvvUkoeeVc3p5wnUg)获取booster_robotics_sdk_release库(`sandbox/mlf/teleoperation_multi_process`分支))，然后参考`README.md` 把python binding api 安装到本地
+  与Booster Teleop中的安装一致，从[T1说明书-V1.1](https://booster.feishu.cn/wiki/UvowwBes1iNvvUkoeeVc3p5wnUg)获取booster_robotics_sdk_release库(`sandbox/mlf/teleoperation_multi_process`分支)，然后参考`README.md` 把python binding api 安装到本地
 
 * **[pinocchio](https://github.com/stack-of-tasks/pinocchio)库安装**
 
-  该库主要是为了提供FK的计算，如果您已经通过robotpkg包管理器把pinocchio安装下来了，请跳过。如果没有，可直接使用pip进行安装(因为不需要引入casadi等嵌入的库)
+  该库主要是为了提供FK的计算，因为不需要引入casadi等嵌入的库，可直接使用pip进行安装，
 
   ```bash
   python3 -m pip install pin
@@ -60,25 +58,35 @@
 
 ```bash
 ssh master@192.168.10.101  # 连接网线后的进入方式，否则需要知道运控板ip地址
-cd ~/ros2
-source ./install/setup.bash
+cd ~/ros2 
+source ./install/setup.bash 
 ros2 launch orbbec_camera multi_camera.launch.py
 ```
-
-接下来**务必于感知板运行**
 
 ## 2.1 直接实时保存数据
 
 主要流程为:
 
-1. (如果需要手腕相机数据)启动手腕相机，默认相机启动包已经安装于运控板下的`~/ros2_ws/src`
+1. 进入感知板
+
+   ```bash
+   ssh booster@192.168.10.102  # 连接网线后的进入方式，否则需要知道感知板ip地址
+   ```
+   
+1. 如果需要手腕相机数据，提前启动手腕相机，相机启动方式请看booster teleop仓库。运行数据采集脚本，**务必于感知板运行**
 
    ```bash
    cd booster_dataset_builder/booster_dataset
-   python create_booster_data_realtime.py
+   python create_booster_data_realtime.py --r_type=1  
    ```
 
-2. `.npy`数据通过tfds build生成RLDS的数据集，转换如下，详情见**RLDS Dataset Conversion**章节。
+   * 参数含义：
+
+     `--r_type=1`代表：采集三个相机（2个手腕相机，1个头部相机）和关节的数据
+
+     `--r_type=2`代表：采集头部相机和关节的数据
+
+2. `.npy`数据通过tfds build生成RLDS的数据集，保证`booster_dataset/data/`的train和val都有episode文件再进行转换，转换如下。该步建议在自己的pc上操作，但需安装RLDS数据格式基础环境，安装方法参考前文。
 
    > 当然您也可以将它转换成自己需要的格式，`.npy`数据的格式定义在`create_booster_data_realtime.py`，可根据需要修改，当然需保证与机器人发出的数据保持一一对应，详情请仔细阅读下面**RLDS Dataset Conversion**章节的**3.3**。
 
@@ -115,7 +123,7 @@ ros2 launch orbbec_camera multi_camera.launch.py
 
 3. 实时保存数据，确保已经安装了pinocchio库
 
-   开始前需要需要相机有消息数据传输
+   开始前需要确保相机有消息数据传输
 
    ```bash
    ros2 topic echo /camera/color/image_raw # 如果机器人相机是realSense改为/camera/camera/color/image_raw
@@ -125,14 +133,14 @@ ros2 launch orbbec_camera multi_camera.launch.py
 
    ```bash
    cd ~/Workspace
-   source  booster_robotics_sdk_ros2/booster_ros2_interface/install/setup.bash
+   source  booster_robotics_sdk_ros2/booster_ros2_interface/install/setup.bash # 这里我的booster_robotics_sdk_ros2是装在Workspace文件夹里的
    ros2 bag record topics /camera/color/image_raw /low_state
    # 同样如果机器人相机是realSense，话题名改为/camera/camera/color/image_raw
    # 如果需要3个相机的数据泽运行下面代码
    # ros2 bag record topics /camera_right/color/image_raw /camera_left/color/image_raw /camera/camera/color/image_raw /low_state
    ```
 
-4. 运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2 bag转换成.npy数据，ros2 bag的数据文件需放置于`rosbag_2_npy.py`同级文件夹中。转换后会在统计文件的`./data`生成`.npy`格式数据，然后拷贝至booster_dataset/data/的train或者val文件夹中，以便进行RLDS格式转换。（建议在自己的pc上操作，但在自己的pc上操作，要确保进行了步骤2）
+4. 执行如下指令在终端，系统会运行脚本`ros2_data_process/rosbag_2_npy.py`将ros2 bag转换成`.npy`数据。转换后会在文件的`./data`生成`.npy`格式数据。然后需拷贝至booster_dataset/data/的train或者val文件夹中，以便进行RLDS格式转换。建议在自己的pc上操作，但需安装booster_robotics_sdk_ros2和pinocchio库，安装方法参考前文。
 
    ```bash
    python ros2_data_process/rosbag_2_npy.py --bag_path=./your_rosbag2_file_name --output_dir=./data --r_type=2
@@ -148,7 +156,7 @@ ros2 launch orbbec_camera multi_camera.launch.py
      
      `--r_type=2`代表：采集头部相机和关节的数据
 
-4. 最后进行RLDS转换，保证`booster_dataset/data/`的train和val都有episode文件再进行转换，转换如下，详情参考下面**RLDS Dataset Conversion**章节。（建议在自己的pc上操作，因为我们默认没有给机器人装conda）
+4. 最后进行RLDS转换，保证`booster_dataset/data/`的train和val都有episode文件再进行转换，转换如下。该步建议在自己的pc上操作，但需安装RLDS数据格式基础环境，安装方法参考前文。
 
    ```bash
    conda activate rlds_env
